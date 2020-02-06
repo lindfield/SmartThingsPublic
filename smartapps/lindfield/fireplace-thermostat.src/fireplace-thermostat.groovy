@@ -42,6 +42,7 @@ preferences {
         }
         section("Turn on fireplace only when mode is...") {
             input "activeModes", "mode", title: "Which mode(s)", multiple: true
+            input "turnSwitchOff", "bool", title: "Turn off switch when leave mode(s)?", required: true, defaultValue: true
         }
         section("Rename the app") {
             label title: "Assign a name", required: false
@@ -68,27 +69,38 @@ def initialize()
 }
 
 def modeChangeHandler(evt) {
-    if ((activeModes.contains(evt.value)) &&
-	    (enableSwitch.currentSwitch == "on"))
+	log.debug "modeChangeHandler"
+	if (enableSwitch.currentSwitch == "on")
     {
-        thermostat(sensor.currentTemperature)
-    }
-    else
-    {
-		fireplaceOff()
+        if (activeModes.contains(evt.value))
+        {
+            thermostat(sensor.currentTemperature)
+        }
+        else
+        {
+            fireplaceOff()
+            if (turnSwitchOff)
+            {
+            	log.debug "Disabling $enableSwitch"
+                enableSwitch.off()
+            }
+        }
     }
 }
 
 def switchHandler(evt) 
 {
-	if ((evt.value == "on") &&
-        (activeModes.contains(location.mode)))
+	log.debug "switchHandler"
+	if (activeModes.contains(location.mode))
     {
-    	thermostat(sensor.currentTemperature)
-    } 
-    else
-    {
-		fireplaceOff()
+        if (evt.value == "on")
+        {
+            thermostat(sensor.currentTemperature)
+        } 
+        else
+        {
+            fireplaceOff()
+        }
     }
 }
 
@@ -118,12 +130,12 @@ private thermostat(currentTemp)
 
 private fireplaceOn()
 {
-	log.debug "Fireplace on"
+    log.debug "Turning $outlets on"
     outlets.on()
 }
 
 private fireplaceOff()
 {
-	log.debug "Fireplace off"
+    log.debug "Turning $outlets off"
     outlets.off()
 }
