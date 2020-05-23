@@ -1,16 +1,5 @@
 /**
- *  FortrezZ MIMO2+ B-Side
- *
- *  Copyright 2016 FortrezZ, LLC
- *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
+ *  FortrezZ MIMO2+ B-Side contact with delayed open
  *
  */
 definition(
@@ -33,20 +22,23 @@ preferences {
 }
 
 def installed() {
-	log.debug "Installed with settings: ${settings}"
+	log.debug "installed(): Settings: ${settings}"
 
 	initialize()
 }
 
 def updated() {
-	log.debug "Updated with settings: ${settings}"
+	log.debug "updated(): Settings: ${settings}"
 
 	unsubscribe()
 	initialize()
 }
 
 def initialize(){
-	log.debug("Device: ${settings.mimoDevice}")
+	log.debug("initialize(): Device: ${settings.mimoDevice}")
+
+	atomicState.realContact2 = false
+	atomicState.delayContact = false
 
    	subscribe(mimoDevice, "contact2", events)
         
@@ -70,6 +62,7 @@ def initialize(){
 }
 
 def uninstalled() {
+	log.debug("uninstalled()")
     removeChildDevices(getChildDevices())
 }
 
@@ -80,27 +73,29 @@ private removeChildDevices(delete) {
 }
 
 def refresh2(child) {
-	log.debug("refresh2")
+	log.debug("refresh2()")
     atomicState.realContact2 = false
     atomicState.delayContact = false
     def ret = "${child}, ${mimoDevice.id}"
-	log.debug("Refresh ${mimoDevice.id} for ${child}")        
+	log.info("Refresh ${mimoDevice.id} for ${child}")        
     mimoDevice.refresh()
     return ret
 }
 
 def events(evt) {
-	def ch = getChildDevice(mimoDevice.id)
-    
-	log.debug("Parsing ${evt.name}=${evt.value}")
+	log.debug("events(): Parsing ${evt.name}=${evt.value}")
     if (evt.name == "contact2")
     {
+        if (atomicState.delayContact) 
+        {
+          	runIn(10*secondsDelay, recoveryEvent)
+        }
     	if (evt.value == "open") 
         {
         	atomicState.realContact2 = true
             if (!atomicState.delayContact) 
             {
-            	log.debug("Delaying open event for $secondsDelay seconds")
+            	log.info("Delaying open event for $secondsDelay seconds")
                	atomicState.delayContact = true
 				runIn(secondsDelay, delayedEvent)
             }
@@ -110,22 +105,43 @@ def events(evt) {
             atomicState.realContact2 = false
             if (!atomicState.delayContact) 
             {
-            	log.debug("Event: contact=closed")
+            	def ch = getChildDevice(mimoDevice.id)
+            	log.info("Event: contact=closed")
                	ch.eventParse(name: "contact", value: "closed")
-            }
+            }          
         }
     }    
 }
 
 def delayedEvent() {
+	log.debug("delayedEvent()")
 	def ch = getChildDevice(mimoDevice.id)
     
-    log.debug("Delayed Event: contact=open")
+    log.info("Delayed Event: contact=open")
 	ch.eventParse(name: "contact", value: "open")
-    if (atomicState.realContact2 == false)
+    
+    if (!atomicState.realContact2)
     {
-    	log.debug("Delayed Event: contact=closed")
+    	log.info("Delayed Event: contact=closed")
     	ch.eventParse(name: "contact", value: "closed")
     }
     atomicState.delayContact = false
+}
+
+def recoveryEvent() {
+	log.debug("recoveryEvent()")
+	if (atomicState.delayContact) 
+    {
+    	log.warning("Recovery: delayContact was true")
+    	atomicState.delayContact = false
+
+		if (atomicState.realContact2)
+        {
+            ch.eventParse(name: "contact", value: "open")
+        }
+        else
+        {
+            ch.eventParse(name: "contact", value: "closed")
+        }
+    }
 }

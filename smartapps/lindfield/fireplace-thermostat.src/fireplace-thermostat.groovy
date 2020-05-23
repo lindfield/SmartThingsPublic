@@ -86,6 +86,10 @@ def modeChangeHandler(evt) {
             }
         }
     }
+	else
+    {
+        fireplaceOff()
+    }
 }
 
 def switchHandler(evt) 
@@ -101,6 +105,10 @@ def switchHandler(evt)
         {
             fireplaceOff()
         }
+    }
+    else
+    {
+        fireplaceOff()
     }
 }
 
